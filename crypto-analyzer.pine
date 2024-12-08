@@ -16,7 +16,7 @@ atrLength            = input.int(14, "ATR Length")
 adxThreshold         = input.float(20, "ADX Threshold", minval=1)
 volumeMultiplier     = input.float(2.0, "Volume Spike Multiplier")
 supportResistanceLen = input.int(50, "Support/Resistance Lookback")
-riskRewardMultiplier = input.float(2.5, "Risk/Reward Multiplier")
+riskRewardMultiplier = input.float(1.0, "Risk/Reward Multiplier")
 htf                  = input.timeframe("30", "Higher Timeframe for Confirmation")
 
 //------------------------------------------------------
