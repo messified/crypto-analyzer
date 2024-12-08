@@ -1,0 +1,127 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Messified
+
+//@version=6
+indicator("Refined Multi-TF Crypto Analyzer - Hypothetical v6", overlay=true, shorttitle="Crypto Analyzer v6")
+
+//------------------------------------------------------
+// User Inputs
+//------------------------------------------------------
+fastLength           = input.int(9, "Fast EMA Length")
+slowLength           = input.int(26, "Slow EMA Length")
+rsiLength            = input.int(14, "RSI Length")
+rsiOverbought        = input.float(75, "RSI Overbought Level", minval=50, maxval=100)
+rsiOversold          = input.float(25, "RSI Oversold Level", minval=0, maxval=50)
+atrLength            = input.int(14, "ATR Length")
+adxThreshold         = input.float(20, "ADX Threshold", minval=1)
+volumeMultiplier     = input.float(2.0, "Volume Spike Multiplier")
+supportResistanceLen = input.int(50, "Support/Resistance Lookback")
+riskRewardMultiplier = input.float(2.5, "Risk/Reward Multiplier")
+htf                  = input.timeframe("30", "Higher Timeframe for Confirmation")
+
+//------------------------------------------------------
+// Core Calculations - Current Timeframe
+//------------------------------------------------------
+fastEMA = ta.ema(close, fastLength)
+slowEMA = ta.ema(close, slowLength)
+rsi = ta.rsi(close, rsiLength)
+atr = ta.atr(atrLength)
+
+// ADX & DMI
+lengthADX = 14
+tr = ta.rma(ta.tr(true), lengthADX)
+plusDM = ta.rma(((high - high[1]) > (low[1] - low) and (high - high[1] > 0)) ? (high - high[1]) : 0, lengthADX)
+minusDM = ta.rma(((low[1] - low) > (high - high[1]) and (low[1] - low > 0)) ? (low[1] - low) : 0, lengthADX)
+plusDI = (plusDM / tr) * 100
+minusDI = (minusDM / tr) * 100
+dx = math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100
+adx = ta.rma(dx, lengthADX)
+
+// Volume Spike
+averageVolume = ta.sma(volume, 20)
+volumeSpike = volume > averageVolume * volumeMultiplier
+
+// Support/Resistance
+support = ta.lowest(low, supportResistanceLen)
+resistance = ta.highest(high, supportResistanceLen)
+
+// Risk/Reward Levels
+entryPrice = close
+stopLoss = entryPrice - atr
+targetPrice = entryPrice + atr * riskRewardMultiplier
+
+// RSI Divergences
+priceHigherHigh = high > high[1]
+priceLowerLow = low < low[1]
+rsiLowerHigh = rsi < rsi[1] and priceHigherHigh
+rsiHigherLow = rsi > rsi[1] and priceLowerLow
+
+bullishDivergence = priceLowerLow and rsiHigherLow
+bearishDivergence = priceHigherHigh and rsiLowerHigh
+
+// Trend (Current TF)
+bullishTrend = fastEMA > slowEMA and adx > adxThreshold
+bearishTrend = fastEMA < slowEMA and adx > adxThreshold
+
+//------------------------------------------------------
+// Higher Timeframe Confirmation (Hypothetical v6 enhancements)
+//------------------------------------------------------
+// Assume a hypothetical v6 function that better handles multi-timeframe requests with less repainting.
+fastEMA_htf = request.security(syminfo.tickerid, htf, ta.ema(close, fastLength))
+slowEMA_htf = request.security(syminfo.tickerid, htf, ta.ema(close, slowLength))
+rsi_htf     = request.security(syminfo.tickerid, htf, ta.rsi(close, rsiLength))
+
+plusDM_htf  = request.security(syminfo.tickerid, htf, plusDM)
+minusDM_htf = request.security(syminfo.tickerid, htf, minusDM)
+tr_htf      = request.security(syminfo.tickerid, htf, tr)
+plusDI_htf  = (plusDM_htf / tr_htf) * 100
+minusDI_htf = (minusDM_htf / tr_htf) * 100
+dx_htf      = math.abs(plusDI_htf - minusDI_htf) / (plusDI_htf + minusDI_htf) * 100
+adx_htf     = request.security(syminfo.tickerid, htf, ta.rma(dx, lengthADX))
+
+bullishTrend_htf = fastEMA_htf > slowEMA_htf and adx_htf > adxThreshold
+bearishTrend_htf = fastEMA_htf < slowEMA_htf and adx_htf > adxThreshold
+
+//------------------------------------------------------
+// Combined Conditions
+//------------------------------------------------------
+criticalBuy = bullishTrend and bullishTrend_htf and rsi < rsiOversold and volumeSpike and bullishDivergence
+criticalSell = bearishTrend and bearishTrend_htf and rsi > rsiOverbought and volumeSpike and bearishDivergence
+regularBuy = bullishTrend and bullishTrend_htf and rsi < 50 and adx > adxThreshold
+regularSell = bearishTrend and bearishTrend_htf and rsi > 50 and adx > adxThreshold
+holdCondition = not criticalBuy and not criticalSell and not regularBuy and not regularSell and (bullishTrend or bearishTrend)
+
+// Sell Percentages
+sell2Percent = close * 1.02
+sell10Percent = close * 1.10
+sell20Percent = close * 1.20
+
+//------------------------------------------------------
+// Plots and Shapes (Hypothetical Styling Enhancements)
+//------------------------------------------------------
+plot(fastEMA, color=color.new(color.green, 40), title="Fast EMA", linewidth=2)
+plot(slowEMA, color=color.new(color.red, 40), title="Slow EMA", linewidth=2)
+
+// Critical Signals
+plotshape(criticalBuy, title="Critical Buy Signal", text="Critical Buy", style=shape.labelup, location=location.belowbar, size=size.large, color=color.new(color.blue, 0), textcolor=color.white)
+plotshape(criticalSell, title="Critical Sell Signal", text="Critical Sell", style=shape.labeldown, location=location.abovebar, size=size.large, color=color.new(color.orange, 0), textcolor=color.white)
+
+if criticalSell
+    label.new(bar_index, high, text="Target: " + str.tostring(targetPrice, format.mintick) + "\nSL: " + str.tostring(stopLoss, format.mintick) + "\n2%: " + str.tostring(sell2Percent, format.mintick) + "\n10%: " + str.tostring(sell10Percent, format.mintick) + "\n20%: " + str.tostring(sell20Percent, format.mintick),style=label.style_label_down,color=color.new(color.orange, 70), textcolor=color.white)
+
+// Regular Signals
+plotshape(regularBuy, title="Regular Buy", text="Buy", style=shape.triangleup, location=location.belowbar, size=size.small, color=color.green, textcolor=color.white)
+plotshape(regularSell, title="Regular Sell", text="Sell", style=shape.triangledown, location=location.abovebar, size=size.small, color=color.red, textcolor=color.white)
+
+//------------------------------------------------------
+// Alerts (Hypothetical direct alert calling in v6)
+//------------------------------------------------------
+// In v6, assume we can call alert() directly with conditions without separately defining alertcondition().
+if criticalBuy
+    alert("Critical Buy signal on " + syminfo.ticker + " at " + str.tostring(close), alert.freq_once_per_bar)
+
+if criticalSell
+    alert("Critical Sell signal on " + syminfo.ticker + " at " + str.tostring(close) + " - Targets: 2%, 10%, 20%", alert.freq_once_per_bar)
+
+if holdCondition
+    alert("Hold signal for " + syminfo.ticker, alert.freq_once_per_bar)
